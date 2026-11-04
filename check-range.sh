@@ -13,7 +13,8 @@ if [ -z "$BASE" ] || [ -z "$HEAD" ]; then
 fi
 
 # A shallow clone lacks the base, and a range git cannot read must fail, not pass as empty.
-if ! git cat-file -e "$BASE^{commit}" 2>/dev/null || ! git cat-file -e "$HEAD^{commit}" 2>/dev/null; then
+if ! git cat-file -e "$BASE^{commit}" 2>/dev/null || ! git cat-file -e "$HEAD^{commit}" 2>/dev/null \
+    || [ "$(git rev-parse --is-shallow-repository)" = true ]; then
     echo "::error::the range's commits are not in this checkout. Set fetch-depth: 0 on actions/checkout."
     exit 1
 fi

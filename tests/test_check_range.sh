@@ -112,6 +112,19 @@ BASE="$first"
 HEAD="$(git rev-parse HEAD)"
 run_range shallow_clone_fails 1 '::error::' 'fetch-depth: 0'
 
+# --- deeper_shallow_clone_fails: depth 2 holds BASE and HEAD but the range's middle is partial
+new_repo
+BASE="$(git rev-parse HEAD)"
+commit 'Bad one'
+commit 'Bad two'
+commit 'feat: three'
+HEAD="$(git rev-parse HEAD)"
+shallow="$_TMP/shallow$_N"
+git clone -q --depth 2 "file://$REPO" "$shallow"
+cd "$shallow" || exit 1
+git fetch -q --depth 2 origin "$BASE"
+run_range deeper_shallow_clone_fails 1 '::error::' 'fetch-depth: 0'
+
 # --- unreadable_range_fails: both ends exist, a commit between them is gone
 new_repo
 BASE="$(git rev-parse HEAD)"
