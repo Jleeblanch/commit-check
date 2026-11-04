@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Holds every commit subject to the commit format. Home and rules:
+# https://github.com/Jleeblanch/commit-check
+#
+# A rule in a note did not keep the subjects to it, so this checks the subject;
+# the body's rule needs judgment and stays with the note.
+#
+# git's own Revert "..." and Reapply "..." subjects and the fixup!/squash!/amend!
+# prefixes pass, the prefixes only when what follows conforms. A plain `git rebase`
+# replays commits without running this hook, so existing history is never re-judged.
+
+set -euo pipefail
+
+subject=""
+while IFS= read -r line || [ -n "$line" ]; do
+    [ "$line" = '# ------------------------ >8 ------------------------' ] && break
+    case "$line" in '#'*) continue ;; esac
+    [ -n "${line//[[:space:]]/}" ] || continue
+    subject="$line"
+    break
+done < "$1"
+
+# git aborts an empty message itself.
+[ -n "$subject" ] || exit 0
+
+rest="$subject"
+while :; do
+    case "$rest" in
+        'fixup! '* | 'squash! '* | 'amend! '*) rest="${rest#* }" ;;
+        *) break ;;
+    esac
+done
+
+case "$rest" in 'Revert "'* | 'Reapply "'*) exit 0 ;; esac
+
+if ! grep -qE '^(feat|fix|refactor|test|docs|chore)(\([^()[:space:]][^()]*\))?: [^[:space:]]' <<<"$rest"; then
+    problem="it does not start with one of the types, then a colon and a space"
+elif grep -qiE '(fix|review)[ -]rounds?|(^|[^[:alnum:]])round[ -]?[0-9]|final review' <<<"$rest"; then
+    problem="it names a review or fix round instead of what changed"
+else
+    exit 0
+fi
+
+cat >&2 <<MSG
+
+BLOCKED: this commit's subject does not follow the commit format.
+
+  Subject: ${subject}
+  Problem: ${problem}
+
+  Write it as  <type>: <what changed>  or  <type>(<scope>): <what changed>,
+  with a type from: feat fix refactor test docs chore. For example:
+    fix: a redirect is a failed post
+  Name the change, not the review that prompted it; the body says why.
+
+  Format and reasons: https://github.com/Jleeblanch/commit-check#readme
+
+MSG
+exit 1
