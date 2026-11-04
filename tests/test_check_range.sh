@@ -125,6 +125,22 @@ cd "$shallow" || exit 1
 git fetch -q --depth 2 origin "$BASE"
 run_range deeper_shallow_clone_fails 1 '::error::' 'fetch-depth: 0'
 
+# --- empty_message_fails
+new_repo
+BASE="$(git rev-parse HEAD)"
+git commit -q --allow-empty --allow-empty-message --no-verify -m ''
+short="$(git rev-parse --short HEAD)"
+HEAD="$(git rev-parse HEAD)"
+run_range empty_message_fails 1 "::error::$short has no subject"
+
+# --- whitespace_message_fails
+new_repo
+BASE="$(git rev-parse HEAD)"
+git commit -q --allow-empty --allow-empty-message --no-verify --cleanup=verbatim -m "$(printf '   \n\n  \n')"
+short="$(git rev-parse --short HEAD)"
+HEAD="$(git rev-parse HEAD)"
+run_range whitespace_message_fails 1 "::error::$short has no subject"
+
 # --- unreadable_range_fails: both ends exist, a commit between them is gone
 new_repo
 BASE="$(git rev-parse HEAD)"

@@ -56,6 +56,12 @@ for sha in $shas; do
         first="$line"
         break
     done < "$msg"
+    # The hook leaves a missing subject to git, which only aborts a local commit.
+    if [ -z "$first" ]; then
+        failed=$((failed + 1))
+        echo "::error::$short has no subject"
+        continue
+    fi
     if [[ "$first" == '#'* ]]; then
         failed=$((failed + 1))
         echo "::error::$short starts with #, which git would have dropped as a comment: $(clean "$first")"
