@@ -22,6 +22,11 @@ fi
 merges="$(git rev-list --merges "$BASE..$HEAD")"
 shas="$(git rev-list --reverse --no-merges "$BASE..$HEAD")"
 
+# The runner parses ::command:: text and a carriage return can start a fresh line, so no control
+# character from a commit reaches the log. clean_lines keeps newlines for the hook's own layout.
+clean() { printf '%s' "$1" | tr -d '\000-\037\177'; }
+clean_lines() { printf '%s\n' "$1" | tr -d '\000-\011\013-\037\177'; }
+
 checked=0
 failed=0
 msg="$(mktemp)"
@@ -30,7 +35,7 @@ trap 'rm -f "$msg"' EXIT
 for sha in $merges; do
     checked=$((checked + 1))
     failed=$((failed + 1))
-    echo "::error::$(git rev-parse --short "$sha") is a merge commit: $(git log -1 --format=%s "$sha"). Merge commits are not allowed here; rebase onto the base branch."
+    echo "::error::$(git rev-parse --short "$sha") is a merge commit: $(clean "$(git log -1 --format=%s "$sha")"). Merge commits are not allowed here; rebase onto the base branch."
 done
 
 for sha in $shas; do
@@ -48,13 +53,14 @@ for sha in $shas; do
     done < "$msg"
     if [[ "$first" == '#'* ]]; then
         failed=$((failed + 1))
-        echo "::error::$short starts with #, which git would have dropped as a comment: $first"
+        echo "::error::$short starts with #, which git would have dropped as a comment: $(clean "$first")"
         continue
     fi
 
-    if ! bash "$hook" "$msg"; then
+    if ! hook_err="$(bash "$hook" "$msg" 2>&1 >/dev/null)"; then
+        clean_lines "$hook_err" >&2
         failed=$((failed + 1))
-        echo "::error::$short does not follow the commit format: $subject"
+        echo "::error::$short does not follow the commit format: $(clean "$subject")"
     fi
 done
 

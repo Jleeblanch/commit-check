@@ -138,5 +138,41 @@ run_range metacharacter_subject_is_data 1 '1 commits checked, 1 failed'
 if [ -e "$marker" ]; then _report bad metacharacter_marker_not_created "marker file exists"
 else _report ok metacharacter_marker_not_created; fi
 
+# no_injection <name>: RANGE_OUT must hold no raw control byte and no line that is a workflow command
+# other than the script's own ::error::.
+no_injection() {
+    if [[ "$RANGE_OUT" == *$'\r'* ]] || grep -q '^::warning::' <<<"$RANGE_OUT"; then
+        _report bad "$1" "output carries a raw CR or a ::warning:: line: $(printf %q "$RANGE_OUT")"
+    else _report ok "$1"; fi
+}
+
+# --- control_characters_in_subject_are_stripped
+new_repo
+BASE="$(git rev-parse HEAD)"
+commit $'Plain\r::warning::injected\x1b[31m'
+HEAD="$(git rev-parse HEAD)"
+run_range control_characters_in_subject_fail 1 '1 commits checked, 1 failed'
+no_injection control_characters_in_subject_are_stripped
+
+# --- control_characters_in_merge_subject_are_stripped
+new_repo
+BASE="$(git rev-parse HEAD)"
+git checkout -q -b side
+commit 'feat: on the side'
+git checkout -q main
+commit 'feat: on main'
+git merge -q --no-ff --no-verify -m $'feat: merge\r::warning::injected' side
+HEAD="$(git rev-parse HEAD)"
+run_range control_characters_in_merge_subject_fail 1 'merge commit'
+no_injection control_characters_in_merge_subject_are_stripped
+
+# --- control_characters_after_hash_are_stripped
+new_repo
+BASE="$(git rev-parse HEAD)"
+git commit -q --allow-empty --no-verify --cleanup=verbatim -m $'# fix\r::warning::injected'
+HEAD="$(git rev-parse HEAD)"
+run_range control_characters_after_hash_fail 1 'starts with #'
+no_injection control_characters_after_hash_are_stripped
+
 cd "$here" || exit 1
 summary
