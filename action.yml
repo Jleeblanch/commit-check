@@ -1,0 +1,20 @@
+name: commit-check
+description: Checks that every commit in a pull request follows the commit subject format.
+branding:
+  icon: git-commit
+  color: blue
+inputs:
+  base:
+    description: Base commit of the range to check.
+    default: ${{ github.event.pull_request.base.sha }}
+  head:
+    description: Head commit of the range to check.
+    default: ${{ github.event.pull_request.head.sha }}
+runs:
+  using: composite
+  steps:
+    - run: "$GITHUB_ACTION_PATH/check-range.sh"
+      shell: bash
+      env:
+        BASE: ${{ inputs.base }}
+        HEAD: ${{ inputs.head }}
