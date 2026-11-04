@@ -54,4 +54,25 @@ fi
 if [ -z "$problems" ]; then _report ok ci_pins_by_sha
 else _report bad ci_pins_by_sha "${problems#; }"; fi
 
+# commit_format_job_is_limited_to_pull_requests: the action fails by design outside a pull request,
+# so the README's snippet and CI's own job must both carry the guard.
+problems=""
+readme="$root/README.md"
+guard="if: github.event_name == 'pull_request'"
+if [ ! -f "$readme" ]; then
+    note "README.md missing"
+else
+    snippet="$(awk '/^```yaml/{b=""; on=1; next} /^```/{if(on&&b ~ /uses: Jleeblanch\/commit-check@/){print b}; on=0; next} on{b=b $0 "\n"}' "$readme")"
+    [ -n "$snippet" ] || note "README usage snippet not found"
+    grep -qF "$guard" <<<"$snippet" || note "README usage snippet lacks $guard"
+    grep -qE '^on: pull_request' <<<"$snippet" || note "README usage snippet lacks on: pull_request"
+fi
+if [ -f "$ci" ]; then
+    job="$(awk '/^  commit-format:/{on=1; print; next} on && /^  [a-z]/{on=0} on{print}' "$ci")"
+    grep -qF "$guard" <<<"$job" || note "ci.yml commit-format job lacks $guard"
+    grep -qE '^\s*- uses: \./[[:space:]]*$' <<<"$job" || note "ci.yml commit-format job lacks uses: ./"
+fi
+if [ -z "$problems" ]; then _report ok commit_format_job_is_limited_to_pull_requests
+else _report bad commit_format_job_is_limited_to_pull_requests "${problems#; }"; fi
+
 summary

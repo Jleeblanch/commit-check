@@ -25,9 +25,11 @@ Commit text is printed safely: control characters are stripped, and the hook's o
 - Local commits, unless you install the hook. From a clone of your repository:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Jleeblanch/commit-check/main/commit-msg -o .git/hooks/commit-msg
+curl -fsSL https://raw.githubusercontent.com/Jleeblanch/commit-check/v1.0.0/commit-msg -o .git/hooks/commit-msg
 chmod +x .git/hooks/commit-msg
 ```
+
+Use the tag of the latest release in place of `v1.0.0`.
 
 ## The format
 
@@ -50,14 +52,20 @@ Why: a subject names the change, so a log reads as a list of what happened. The 
 Add a job to your pull-request workflow. Pin the action by full commit SHA, with the tag in a comment. `fetch-depth: 0` is required, because the action reads the whole range and a shallow clone does not have it.
 
 ```yaml
-commit-format:
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@<sha> # v7.0.1
-      with:
-        fetch-depth: 0
-    - uses: Jleeblanch/commit-check@<sha> # v1.0.0
+on: pull_request
+
+jobs:
+  commit-format:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@<sha> # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: Jleeblanch/commit-check@<sha> # v1.0.0
 ```
+
+The action fails by design outside a pull request, because there is no range to read. In a workflow that also runs on push, the `commit-format` job must be limited to pull requests with the `if:` line above.
 
 Dependabot's `github-actions` ecosystem bumps the pinned SHA when a new release is out. Its own commit subjects need the format too, so give it a prefix in `.github/dependabot.yml`:
 
