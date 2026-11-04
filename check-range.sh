@@ -23,9 +23,13 @@ merges="$(git rev-list --merges "$BASE..$HEAD")"
 shas="$(git rev-list --reverse --no-merges "$BASE..$HEAD")"
 
 # The runner parses ::command:: text and a carriage return can start a fresh line, so no control
-# character from a commit reaches the log. clean_lines keeps newlines for the hook's own layout.
+# character from a commit reaches the log. clean_lines keeps newlines (and drops tabs) for the hook's own layout.
 clean() { printf '%s' "$1" | tr -d '\000-\037\177'; }
 clean_lines() { printf '%s\n' "$1" | tr -d '\000-\011\013-\037\177'; }
+
+# Legacy ##[command] text is parsed anywhere in a line, so the hook's output is relayed with
+# workflow commands stopped, under a token a commit author cannot know ahead of time.
+token() { od -An -tx1 -N16 /dev/urandom | tr -d ' \n'; }
 
 checked=0
 failed=0
@@ -58,7 +62,10 @@ for sha in $shas; do
     fi
 
     if ! hook_err="$(bash "$hook" "$msg" 2>&1 >/dev/null)"; then
-        clean_lines "$hook_err" >&2
+        stop_token="$(token)"
+        echo "::stop-commands::$stop_token"
+        clean_lines "$hook_err"
+        echo "::$stop_token::"
         failed=$((failed + 1))
         echo "::error::$short does not follow the commit format: $(clean "$subject")"
     fi

@@ -32,6 +32,7 @@ run_range() {
     shift 2
     out="$(bash "$SCRIPT" 2>&1)"
     status=$?
+    RANGE_OUT="$out"
     if { [ "$want" = nonzero ] && [ "$status" -eq 0 ]; } || { [ "$want" != nonzero ] && [ "$status" -ne "$want" ]; }; then
         _report bad "$name" "expected exit $want, got $status: $out"
         return
@@ -43,7 +44,6 @@ run_range() {
         fi
     done
     _report ok "$name"
-    RANGE_OUT="$out"
 }
 
 # --- clean_range_passes
@@ -173,6 +173,34 @@ git commit -q --allow-empty --no-verify --cleanup=verbatim -m $'# fix\r::warning
 HEAD="$(git rev-parse HEAD)"
 run_range control_characters_after_hash_fail 1 'starts with #'
 no_injection control_characters_after_hash_are_stripped
+
+# --- legacy_commands_in_relayed_hook_output_are_stopped
+new_repo
+BASE="$(git rev-parse HEAD)"
+commit 'Plain ##[warning]injected'
+HEAD="$(git rev-parse HEAD)"
+run_range legacy_command_subject_fails 1 '1 commits checked, 1 failed'
+first_out="$RANGE_OUT"
+run_range legacy_command_subject_fails_again 1 '1 commits checked, 1 failed'
+second_out="$RANGE_OUT"
+
+# stopped_ok <output>: every ##[ line outside our own ::error:: lines sits between a
+# ::stop-commands::T line and its matching ::T:: line; prints the token.
+stopped_ok() {
+    awk '
+        /^::stop-commands::/ { if (tok != "") bad = 1; tok = substr($0, 18); n++; next }
+        tok != "" && $0 == "::" tok "::" { tok = ""; next }
+        /##\[/ && $0 !~ /^::error::/ && tok == "" { bad = 1 }
+        END { exit (bad || tok != "" || n == 0) }
+    ' <<<"$1"
+}
+token_of() { grep -m1 '^::stop-commands::' <<<"$1" | cut -c18-; }
+
+if stopped_ok "$first_out"; then _report ok legacy_commands_are_inside_a_stopped_block
+else _report bad legacy_commands_are_inside_a_stopped_block "$(printf %q "$first_out")"; fi
+t1="$(token_of "$first_out")"; t2="$(token_of "$second_out")"
+if [ -n "$t1" ] && [ "$t1" != "$t2" ]; then _report ok stop_commands_token_differs_per_run
+else _report bad stop_commands_token_differs_per_run "tokens: '$t1' '$t2'"; fi
 
 cd "$here" || exit 1
 summary
